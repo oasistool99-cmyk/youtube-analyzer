@@ -11,12 +11,15 @@ import json
 import base64
 import tempfile
 import subprocess
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 import anthropic
 
 app = Flask(__name__)
 CORS(app)
+
+# index.html의 절대 경로
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
@@ -295,7 +298,93 @@ def generate_final_report(summary, topic, keywords, image_analyses):
 
 @app.route("/", methods=["GET"])
 def home():
-    return send_file("index.html")
+    return Response(FRONTEND_HTML, mimetype="text/html")
+
+
+FRONTEND_HTML = '''<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube 스마트 분석기</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{background:#0a0a0f;font-family:'Outfit',sans-serif;color:#e8e8ee;min-height:100vh}::selection{background:#ff3e5544}input:focus{outline:none;border-color:#ff3e5566!important}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}.wrap{max-width:640px;margin:0 auto;padding:28px 16px}.header{text-align:center;margin-bottom:24px}.logo-row{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}.logo{font-size:22px;font-weight:700;letter-spacing:-.5px;background:linear-gradient(135deg,#ff3e55,#ff8a65);-webkit-background-clip:text;-webkit-text-fill-color:transparent}.sub{font-size:13px;color:#777}.card{background:#13131f;border:1px solid #1f1f32;border-radius:14px;padding:18px;margin-bottom:12px;animation:fadeUp .4s ease}.label{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:block}.row{display:flex;gap:8px}.input{flex:1;background:#0c0c15;border:1px solid #2a2a3a;border-radius:10px;padding:11px 14px;color:#e8e8ee;font-size:13px;font-family:'JetBrains Mono',monospace}.hint{font-size:11px;color:#555;margin-top:6px}.btn{background:linear-gradient(135deg,#ff3e55,#e62e45);border:none;border-radius:10px;padding:11px 18px;color:#fff;font-size:13px;font-weight:600;font-family:'Outfit';cursor:pointer;white-space:nowrap}.btn:hover{filter:brightness(1.1)}.btn:disabled{opacity:.5;cursor:not-allowed}.btn-ghost{background:transparent;border:1px solid #2a2a3a;border-radius:10px;padding:9px 16px;color:#999;font-size:12px;font-weight:500;font-family:'Outfit';cursor:pointer}.btn-sm{background:#1a1a2e;border:1px solid #2a2a3a;border-radius:8px;padding:7px 12px;color:#ccc;font-size:12px;font-family:'Outfit';cursor:pointer}.mode-toggle{display:flex;gap:4px;margin-bottom:14px;padding:4px;background:#0c0c15;border-radius:12px;border:1px solid #1f1f32}.mode-btn{flex:1;padding:9px 10px;border:none;border-radius:10px;background:transparent;color:#666;font-size:13px;font-weight:600;font-family:'Outfit';cursor:pointer}.mode-btn.on{background:#1a1a2e;color:#ff6b7a;box-shadow:0 2px 8px rgba(255,62,85,.12)}.badge{font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px}.thumb{width:100px;height:56px;border-radius:6px;object-fit:cover;background:#1a1a2a;flex-shrink:0}.stat{background:#0c0c15;border-radius:10px;padding:12px 14px;text-align:center}.stat-label{font-size:11px;color:#666;margin-bottom:4px}.stat-val{font-size:16px;font-weight:600;font-family:'JetBrains Mono'}.dots{display:flex;gap:6px;justify-content:center;padding:16px}.dots span{width:8px;height:8px;border-radius:50%;background:#ff3e55;animation:pulse 1.2s ease-in-out infinite}.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}.result h3{font-size:16px;font-weight:700;color:#f0f0f5;margin-top:16px;margin-bottom:8px}.result p{font-size:14px;color:#bbb;margin-bottom:4px;line-height:1.7}.result .bullet{padding-left:8px}.stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}.img-item{background:#0c0c15;border:1px solid #1f1f32;border-radius:8px;padding:12px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo-row">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="4" fill="#ff3e55"/><polygon points="10,8 10,16 16,12" fill="#fff"/></svg>
+      <span class="logo">YouTube 완전 자동 분석기</span>
+    </div>
+    <p class="sub">링크만 넣으면 자막 추출 &rarr; AI 분석 &rarr; 화면 캡처까지 전부 자동</p>
+  </div>
+  <div class="mode-toggle" id="modeSection">
+    <button class="mode-btn on" id="smartBtn" onclick="setMode('smart')">&#x1F9E0; 스마트 분석</button>
+    <button class="mode-btn" id="fastBtn" onclick="setMode('fast')">&#x26A1; 빠른 분석</button>
+  </div>
+  <div class="card" id="inputCard">
+    <label class="label">YouTube 링크</label>
+    <div class="row">
+      <input class="input" id="urlInput" placeholder="https://www.youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')analyze()">
+      <button class="btn" id="analyzeBtn" onclick="analyze()">&#x1F50D; 분석</button>
+    </div>
+    <p class="hint" id="modeHint">자막 분석 + 핵심 장면 자동 캡처 + 화면 분석 (1~3분 소요, ~&#8361;600)</p>
+  </div>
+  <div class="card" id="loadingCard" style="display:none">
+    <div class="dots"><span></span><span></span><span></span></div>
+    <p style="text-align:center;color:#aaa;font-size:13px" id="loadingMsg"></p>
+  </div>
+  <div class="card" id="errorCard" style="display:none;border-color:#ff3e5544">
+    <p style="color:#ff6b7a;font-size:14px" id="errorMsg"></p>
+    <button class="btn-sm" style="margin-top:10px" onclick="hideError()">확인</button>
+  </div>
+  <div id="resultSection" style="display:none">
+    <div class="card" id="videoInfoCard" style="display:none">
+      <div style="display:flex;gap:12px;align-items:center">
+        <img id="videoThumb" class="thumb" src="">
+        <div style="flex:1;min-width:0">
+          <p style="font-size:15px;font-weight:600;line-height:1.4" id="videoTitle"></p>
+          <p style="font-size:12px;color:#777;margin-top:2px" id="videoAuthor"></p>
+          <p style="font-size:12px;color:#555;margin-top:2px" id="videoDuration"></p>
+        </div>
+      </div>
+    </div>
+    <div class="stats-grid" id="statsGrid" style="display:none">
+      <div class="stat"><div class="stat-label">자막</div><div class="stat-val" id="statSubs">0</div></div>
+      <div class="stat"><div class="stat-label">캡처</div><div class="stat-val" id="statFrames">0</div></div>
+      <div class="stat"><div class="stat-label">비용</div><div class="stat-val" id="statCost">&#8361;0</div></div>
+    </div>
+    <div class="card" id="imageCard" style="display:none">
+      <span class="badge" style="background:#ff3e5522;color:#ff6b7a" id="imageBadge"></span>
+      <div id="imageList" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="reportCard" style="border-color:#ff3e5533">
+      <span class="badge" style="background:#ff3e5522;color:#ff6b7a" id="reportBadge"></span>
+      <div class="result" id="reportContent" style="margin-top:14px;line-height:1.8"></div>
+    </div>
+    <div style="text-align:center;margin-top:10px">
+      <button class="btn-ghost" onclick="resetAll()">&#8634; 새로운 영상 분석하기</button>
+    </div>
+  </div>
+</div>
+<script>
+let mode='smart',msgTimer=null;const API_BASE=window.location.origin;
+const smartMsgs=["서버가 영상 정보를 가져오고 있어요...","yt-dlp로 자막을 추출하고 있어요...","AI가 자막을 분석하고 있어요...","핵심 장면을 찾아서 자동 캡처 중...","캡처한 화면을 AI가 분석하고 있어요...","최종 리포트를 정리하고 있어요..."];
+const fastMsgs=["서버가 영상 정보를 가져오고 있어요...","yt-dlp로 자막을 추출하고 있어요...","AI가 자막을 분석하고 있어요...","최종 리포트 정리 중..."];
+function setMode(m){mode=m;document.getElementById('smartBtn').className='mode-btn'+(m==='smart'?' on':'');document.getElementById('fastBtn').className='mode-btn'+(m==='fast'?' on':'');document.getElementById('modeHint').textContent=m==='smart'?'자막 분석 + 핵심 장면 자동 캡처 + 화면 분석 (1~3분 소요)':'자막만 분석 (30초~1분 소요)';}
+function showLoading(msgs){document.getElementById('loadingCard').style.display='block';document.getElementById('inputCard').style.display='none';document.getElementById('modeSection').style.display='none';let i=0;document.getElementById('loadingMsg').textContent=msgs[0];msgTimer=setInterval(()=>{i=Math.min(i+1,msgs.length-1);document.getElementById('loadingMsg').textContent=msgs[i];},8000);}
+function hideLoading(){document.getElementById('loadingCard').style.display='none';if(msgTimer){clearInterval(msgTimer);msgTimer=null;}}
+function showError(msg){document.getElementById('errorCard').style.display='block';document.getElementById('errorMsg').textContent=msg;}
+function hideError(){document.getElementById('errorCard').style.display='none';document.getElementById('inputCard').style.display='block';document.getElementById('modeSection').style.display='flex';}
+function resetAll(){document.getElementById('urlInput').value='';document.getElementById('resultSection').style.display='none';document.getElementById('inputCard').style.display='block';document.getElementById('modeSection').style.display='flex';document.getElementById('errorCard').style.display='none';hideLoading();}
+function renderReport(text){return text.split('\\n').map(line=>{if(line.match(/^[\\u{1F4CC}\\u{1F4DD}\\u{1F4A1}\\u{1F3AF}\\u{1F5BC}]/u))return'<h3>'+line+'</h3>';if(line.trim().startsWith('-')||line.trim().startsWith('\\u2022'))return'<p class="bullet">'+line+'</p>';if(line.trim())return'<p>'+line+'</p>';return'<div style="height:6px"></div>';}).join('');}
+async function analyze(){const url=document.getElementById('urlInput').value.trim();if(!url){showError('YouTube URL을 입력해주세요.');return;}const endpoint=mode==='smart'?'/api/analyze':'/api/analyze-text';showLoading(mode==='smart'?smartMsgs:fastMsgs);document.getElementById('errorCard').style.display='none';document.getElementById('resultSection').style.display='none';try{const res=await fetch(API_BASE+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,capture_frames:true})});const data=await res.json();hideLoading();if(data.error){showError(data.error);document.getElementById('inputCard').style.display='block';document.getElementById('modeSection').style.display='flex';return;}document.getElementById('resultSection').style.display='block';if(data.video_info){document.getElementById('videoInfoCard').style.display='block';document.getElementById('videoThumb').src=data.video_info.thumbnail||'';document.getElementById('videoTitle').textContent=data.video_info.title||'분석 완료';document.getElementById('videoAuthor').textContent=data.video_info.author||'';if(data.video_info.duration>0){document.getElementById('videoDuration').textContent=Math.floor(data.video_info.duration/60)+'분 '+(data.video_info.duration%60)+'초';}}if(data.stats){document.getElementById('statsGrid').style.display='grid';document.getElementById('statSubs').textContent=(data.stats.subtitles_count||0)+'개';document.getElementById('statFrames').textContent=(data.stats.frames_captured||0)+'장';document.getElementById('statCost').textContent='~₩'+(data.stats.estimated_cost_krw||0);}if(data.image_analyses&&data.image_analyses.length>0){document.getElementById('imageCard').style.display='block';document.getElementById('imageBadge').textContent='자동 캡처 + 화면 분석 ('+data.image_analyses.length+'장)';document.getElementById('imageList').innerHTML=data.image_analyses.map(a=>'<div class="img-item"><div style="display:flex;gap:8px;align-items:baseline;margin-bottom:6px"><span style="font-family:JetBrains Mono;font-size:12px;color:#ff6b7a;font-weight:500">'+a.timestamp+'</span><span style="font-size:12px;color:#888">'+a.reason+'</span></div><p style="font-size:13px;color:#bbb;line-height:1.6">'+a.description+'</p></div>').join('');}if(data.final_report){document.getElementById('reportBadge').textContent=(mode==='smart'?'스마트':'빠른')+' 분석 완료';document.getElementById('reportContent').innerHTML=renderReport(data.final_report);}document.getElementById('resultSection').scrollIntoView({behavior:'smooth'});}catch(e){hideLoading();showError('서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');document.getElementById('inputCard').style.display='block';document.getElementById('modeSection').style.display='flex';}}
+</script>
+</body>
+</html>'''
 
 
 @app.route("/api/health", methods=["GET"])
