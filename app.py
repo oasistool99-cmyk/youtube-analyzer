@@ -386,7 +386,9 @@ async function analyze(){const url=document.getElementById('urlInput').value.tri
 </body>
 </html>'''
 
-
+@app.route("/", methods=["GET"])
+def home():
+    return "<h1>Hello! Server is working!</h1>"
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
