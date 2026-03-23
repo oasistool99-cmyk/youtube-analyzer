@@ -1,0 +1,5 @@
+flask==3.1.0
+flask-cors==5.0.1
+anthropic==0.43.0
+yt-dlp==2024.12.23
+gunicorn==23.0.0
