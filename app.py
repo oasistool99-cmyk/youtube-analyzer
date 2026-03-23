@@ -11,15 +11,12 @@ import json
 import base64
 import tempfile
 import subprocess
-from flask import Flask, request, jsonify, send_file, Response
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import anthropic
 
 app = Flask(__name__)
 CORS(app)
-
-# index.html의 절대 경로
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
@@ -298,7 +295,7 @@ def generate_final_report(summary, topic, keywords, image_analyses):
 
 @app.route("/", methods=["GET"])
 def home():
-    return send_file(os.path.join(BASE_DIR, "index.html"))
+    return send_file("index.html")
 
 
 @app.route("/api/health", methods=["GET"])
