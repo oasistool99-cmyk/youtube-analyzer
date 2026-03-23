@@ -11,7 +11,7 @@ import json
 import base64
 import tempfile
 import subprocess
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import anthropic
 
@@ -292,6 +292,11 @@ def generate_final_report(summary, topic, keywords, image_analyses):
 
 
 # ───────────────────────── API 라우트 ─────────────────────────
+
+@app.route("/", methods=["GET"])
+def home():
+    return send_file("index.html")
+
 
 @app.route("/api/health", methods=["GET"])
 def health():
