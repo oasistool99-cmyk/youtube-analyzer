@@ -1,20 +1,13 @@
-iimport os
-import re
-import json
-import base64
-import tempfile
-import subprocess
-from flask import Flask, request, jsonify, Response
+import os
+from flask import Flask, jsonify, Response
 from flask_cors import CORS
-import anthropic
 
 app = Flask(__name__)
 CORS(app)
-client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 @app.route("/")
 def home():
-    return Response("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>YouTube Analyzer</title></head><body><h1>Server is working!</h1></body></html>", mimetype="text/html")
+    return Response("<h1>Server is working!</h1>", mimetype="text/html")
 
 @app.route("/api/health")
 def health():
