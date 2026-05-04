@@ -1,5 +1,5 @@
-flask==3.1.0
-flask-cors==5.0.1
-anthropic==0.43.0
-yt-dlp==2024.12.23
-gunicorn==23.0.0
+flask>=3.0.0
+   flask-cors>=4.0.0
+   yt-dlp>=2024.10.0
+   imageio-ffmpeg>=0.5.1
+   gunicorn>=21.2.0
