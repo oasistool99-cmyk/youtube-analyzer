@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유튜브 구간 자르기</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="header">
+    <div class="logo-row"><span class="logo">🎬 유튜브 구간 자르기</span></div>
+    <p class="sub">YouTube 링크와 시작/끝 시간을 넣으면 잘라서 내려받습니다.</p>
+  </header>
+
+  <section class="card">
+    <label class="label" for="url">YouTube 링크</label>
+    <input class="input" id="url" type="url" autocomplete="off"
+           placeholder="https://www.youtube.com/watch?v=...">
+
+    <div class="row" style="margin-top:14px">
+      <div style="flex:1">
+        <label class="label" for="start">시작 시간</label>
+        <input class="input" id="start" placeholder="02:35" autocomplete="off">
+        <p class="hint">분:초 또는 시:분:초</p>
+      </div>
+      <div style="flex:1">
+        <label class="label" for="end">끝 시간</label>
+        <input class="input" id="end" placeholder="05:10" autocomplete="off">
+        <p class="hint">분:초 또는 시:분:초</p>
+      </div>
+    </div>
+
+    <button class="btn" id="clipBtn" type="button" style="width:100%;margin-top:18px">
+      🎬 자르고 내려받기
+    </button>
+    <p class="loading-msg" id="status"></p>
+  </section>
+
+  <footer class="footer">
+    <a href="/">← AI 분석기로 돌아가기</a>
+  </footer>
+</div>
+<script src="/static/clip.js"></script>
+</body>
+</html>

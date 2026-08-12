@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube 스마트 분석기</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="header">
+    <div class="logo-row">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="4" fill="#ff3e55"/><polygon points="10,8 10,16 16,12" fill="#fff"/></svg>
+      <span class="logo">YouTube 스마트 분석기</span>
+    </div>
+    <p class="sub">링크만 넣으면 자막 추출 → AI 분석 → 핵심 장면 캡처까지 자동으로</p>
+  </header>
+
+  <div class="mode-toggle" id="modeSection" role="group" aria-label="분석 모드">
+    <button class="mode-btn on" id="smartBtn" type="button" data-mode="smart">🧠 스마트 분석</button>
+    <button class="mode-btn" id="fastBtn" type="button" data-mode="fast">⚡ 빠른 분석</button>
+  </div>
+
+  <section class="card" id="inputCard">
+    <label class="label" for="urlInput">YouTube 링크</label>
+    <div class="row">
+      <input class="input" id="urlInput" type="url" autocomplete="off"
+             placeholder="https://www.youtube.com/watch?v=...">
+      <button class="btn" id="analyzeBtn" type="button">🔍 분석</button>
+    </div>
+    <p class="hint" id="modeHint">자막 분석 + 핵심 장면 자동 캡처 + 화면 분석</p>
+  </section>
+
+  <section class="card" id="loadingCard" hidden aria-live="polite">
+    <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+    <p class="loading-msg" id="loadingMsg"></p>
+    <button class="btn-sm" id="cancelBtn" type="button">취소</button>
+  </section>
+
+  <section class="card error-card" id="errorCard" hidden role="alert">
+    <p class="error-msg" id="errorMsg"></p>
+    <button class="btn-sm" id="errorDismiss" type="button">확인</button>
+  </section>
+
+  <div id="resultSection" hidden>
+    <section class="card" id="videoInfoCard" hidden>
+      <div class="video-row">
+        <img id="videoThumb" class="thumb" alt="" src="" hidden>
+        <div class="video-meta">
+          <p class="video-title" id="videoTitle"></p>
+          <p class="video-author" id="videoAuthor"></p>
+          <p class="video-duration" id="videoDuration"></p>
+        </div>
+      </div>
+    </section>
+
+    <div class="stats-grid" id="statsGrid" hidden>
+      <div class="stat"><div class="stat-label">자막 큐</div><div class="stat-val" id="statCues">0</div></div>
+      <div class="stat"><div class="stat-label">캡처</div><div class="stat-val" id="statFrames">0</div></div>
+      <div class="stat"><div class="stat-label">실제 비용</div><div class="stat-val" id="statCost">₩0</div></div>
+    </div>
+    <p class="cost-note" id="costNote" hidden></p>
+
+    <section class="card" id="imageCard" hidden>
+      <span class="badge" id="imageBadge"></span>
+      <div id="imageList" class="img-list"></div>
+    </section>
+
+    <section class="card report-card" id="reportCard" hidden>
+      <span class="badge" id="reportBadge"></span>
+      <div class="result" id="reportContent"></div>
+    </section>
+
+    <div class="center">
+      <button class="btn-ghost" id="resetBtn" type="button">↺ 새로운 영상 분석하기</button>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <a href="/clip">구간 잘라 내려받기 →</a>
+  </footer>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

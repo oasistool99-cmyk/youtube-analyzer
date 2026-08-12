@@ -1,249 +1,205 @@
-import os
-import subprocess
-import tempfile
-import uuid
-import re
-from flask import Flask, jsonify, request, send_file, render_template_string, after_this_request
-from flask_cors import CORS
-import yt_dlp
-import imageio_ffmpeg
+"""YouTube 스마트 분석기 — HTTP 계층.
 
-app = Flask(__name__)
-CORS(app)
-
-# imageio-ffmpeg가 제공하는 ffmpeg 실행 파일 경로
-FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
-
-
-# ---- HTML 페이지 (사용자 화면) ----
-HTML = """
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>유튜브 영상 자르기</title>
-<style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif;
-    max-width: 640px; margin: 0 auto; padding: 24px;
-    background: #f5f5f7; color: #1d1d1f;
-  }
-  h1 { font-size: 28px; margin-bottom: 8px; }
-  .sub { color: #6e6e73; margin-bottom: 24px; }
-  .card {
-    background: white; padding: 24px; border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  }
-  label { display: block; font-weight: 600; margin: 12px 0 6px; font-size: 14px; }
-  input {
-    width: 100%; padding: 12px; font-size: 16px;
-    border: 1px solid #d2d2d7; border-radius: 8px;
-    transition: border 0.2s;
-  }
-  input:focus { outline: none; border-color: #0071e3; }
-  .row { display: flex; gap: 12px; }
-  .row > div { flex: 1; }
-  button {
-    width: 100%; padding: 14px; font-size: 16px; font-weight: 600;
-    background: #0071e3; color: white; border: none; border-radius: 8px;
-    cursor: pointer; margin-top: 20px; transition: background 0.2s;
-  }
-  button:hover:not(:disabled) { background: #0058b8; }
-  button:disabled { background: #999; cursor: not-allowed; }
-  #status {
-    margin-top: 16px; padding: 12px; border-radius: 8px;
-    font-size: 14px; display: none;
-  }
-  #status.show { display: block; }
-  #status.info { background: #e3f2fd; color: #0d47a1; }
-  #status.error { background: #ffebee; color: #c62828; }
-  #status.success { background: #e8f5e9; color: #2e7d32; }
-  .hint { font-size: 12px; color: #6e6e73; margin-top: 4px; }
-</style>
-</head>
-<body>
-  <h1>🎬 유튜브 영상 자르기</h1>
-  <p class="sub">YouTube URL과 시작/끝 시간만 입력하면 잘라서 다운로드해 드립니다.</p>
-
-  <div class="card">
-    <label>YouTube 주소</label>
-    <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=...">
-
-    <div class="row">
-      <div>
-        <label>시작 시간</label>
-        <input type="text" id="start" placeholder="02:35">
-        <div class="hint">분:초 또는 시:분:초</div>
-      </div>
-      <div>
-        <label>끝 시간</label>
-        <input type="text" id="end" placeholder="05:10">
-        <div class="hint">분:초 또는 시:분:초</div>
-      </div>
-    </div>
-
-    <button id="btn" onclick="clipVideo()">🎬 자르고 다운로드</button>
-    <div id="status"></div>
-  </div>
-
-<script>
-async function clipVideo() {
-  const url = document.getElementById('url').value.trim();
-  const start = document.getElementById('start').value.trim();
-  const end = document.getElementById('end').value.trim();
-  const btn = document.getElementById('btn');
-  const status = document.getElementById('status');
-
-  if (!url || !start || !end) {
-    showStatus('error', '모든 항목을 입력해 주세요.');
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ 처리 중...';
-  showStatus('info', '영상을 다운로드하고 자르는 중입니다. 1~3분 소요될 수 있어요.');
-
-  try {
-    const res = await fetch('/api/clip', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({url, start, end})
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({error: 'Unknown error'}));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
-
-    const blob = await res.blob();
-    const downloadUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `clip_${start.replace(/:/g,'')}_${end.replace(/:/g,'')}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(downloadUrl);
-
-    showStatus('success', '✅ 다운로드 완료! 다운로드 폴더를 확인하세요.');
-  } catch (e) {
-    showStatus('error', '❌ 오류: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🎬 자르고 다운로드';
-  }
-}
-
-function showStatus(type, msg) {
-  const status = document.getElementById('status');
-  status.className = 'show ' + type;
-  status.textContent = msg;
-}
-</script>
-</body>
-</html>
+라우팅과 입출력만 담당하고, 실제 로직은 `analyzer` 패키지에 있습니다.
 """
 
+from __future__ import annotations
 
-def validate_time(t):
-    """시간 형식 확인: MM:SS 또는 HH:MM:SS"""
-    if not re.match(r'^\d{1,2}(:\d{1,2}){1,2}$', t):
-        return False
-    return True
+import json
+import logging
+import os
+
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory
+
+import config
+from analyzer import clip, pipeline, youtube
+from analyzer.errors import AnalyzerError
+from analyzer.ratelimit import analysis_limiter, client_key
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger(__name__)
+
+app = Flask(__name__, static_folder="static", static_url_path="/static")
+
+if config.CORS_ORIGINS:
+    from flask_cors import CORS
+
+    CORS(app, origins=config.CORS_ORIGINS)
+
+_CSP = (
+    "default-src 'self'; "
+    "img-src 'self' data: https://i.ytimg.com https://*.ggpht.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "script-src 'self'; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'"
+)
 
 
-# ---- 라우트 ----
-@app.route("/")
+@app.after_request
+def security_headers(response: Response) -> Response:
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Content-Security-Policy", _CSP)
+    return response
+
+
+@app.errorhandler(AnalyzerError)
+def handle_analyzer_error(error: AnalyzerError):
+    return jsonify({"error": error.message}), error.status_code
+
+
+@app.errorhandler(Exception)
+def handle_unexpected(error: Exception):
+    # 내부 예외 내용은 로그에만 남기고 클라이언트에는 일반 메시지를 줍니다.
+    log.exception("처리되지 않은 오류: %s", error)
+    return jsonify({"error": "서버에서 오류가 발생했습니다."}), 500
+
+
+# --------------------------------------------------------------------------
+# 페이지
+# --------------------------------------------------------------------------
+
+
+@app.get("/")
 def home():
-    return render_template_string(HTML)
+    return send_from_directory(app.static_folder, "index.html")
 
 
-@app.route("/api/health")
+@app.get("/clip")
+def clip_page():
+    return send_from_directory(app.static_folder, "clip.html")
+
+
+@app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "ffmpeg": FFMPEG_PATH})
-
-
-@app.route("/api/clip", methods=["POST"])
-def clip():
-    data = request.get_json(silent=True) or {}
-    url = (data.get("url") or "").strip()
-    start = (data.get("start") or "").strip()
-    end = (data.get("end") or "").strip()
-
-    # 1. 입력 검증
-    if not url or not start or not end:
-        return jsonify({"error": "url, start, end 가 모두 필요합니다."}), 400
-
-    if "youtube.com" not in url and "youtu.be" not in url:
-        return jsonify({"error": "YouTube URL이 아닙니다."}), 400
-
-    if not validate_time(start) or not validate_time(end):
-        return jsonify({"error": "시간 형식이 올바르지 않습니다. (예: 02:35)"}), 400
-
-    # 2. 임시 작업 폴더
-    work_dir = tempfile.mkdtemp(prefix="ytclip_")
-    video_id = str(uuid.uuid4())[:8]
-    full_path = os.path.join(work_dir, f"{video_id}_full.mp4")
-    clip_path = os.path.join(work_dir, f"{video_id}_clip.mp4")
-
-    try:
-        # 3. yt-dlp로 영상 다운로드 (720p 이하로 제한 - 속도/용량 고려)
-        ydl_opts = {
-            'format': 'best[ext=mp4][height<=720]/best[height<=720]/best',
-            'outtmpl': full_path,
-            'quiet': True,
-            'no_warnings': True,
-            'ffmpeg_location': FFMPEG_PATH,
+    return jsonify(
+        {
+            "status": "ok",
+            "model": config.ANALYSIS_MODEL,
+            "effort": config.ANALYSIS_EFFORT,
+            "api_key_configured": bool(config.ANTHROPIC_API_KEY),
+            "max_video_duration_sec": config.MAX_VIDEO_DURATION_SEC,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+    )
 
-        if not os.path.exists(full_path):
-            return jsonify({"error": "영상 다운로드에 실패했습니다."}), 500
 
-        # 4. ffmpeg로 자르기 (-c copy: 재인코딩 없이 빠르게)
-        cmd = [
-            FFMPEG_PATH, '-y',
-            '-ss', start,
-            '-to', end,
-            '-i', full_path,
-            '-c', 'copy',
-            '-avoid_negative_ts', 'make_zero',
-            clip_path
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+# --------------------------------------------------------------------------
+# 분석
+# --------------------------------------------------------------------------
 
-        if result.returncode != 0 or not os.path.exists(clip_path):
-            return jsonify({
-                "error": f"영상 자르기 실패: {result.stderr[-300:] if result.stderr else 'unknown'}"
-            }), 500
 
-        # 5. 응답 후 임시 파일 정리
-        @after_this_request
-        def cleanup(response):
-            try:
-                if os.path.exists(full_path):
-                    os.remove(full_path)
-                if os.path.exists(clip_path):
-                    os.remove(clip_path)
-                os.rmdir(work_dir)
-            except Exception as e:
-                app.logger.warning(f"cleanup error: {e}")
-            return response
+def _read_url(payload: dict) -> str:
+    return youtube.extract_video_id((payload.get("url") or "").strip())
 
-        download_name = f"clip_{start.replace(':','')}_{end.replace(':','')}.mp4"
-        return send_file(clip_path, as_attachment=True, download_name=download_name, mimetype='video/mp4')
 
-    except yt_dlp.utils.DownloadError as e:
-        return jsonify({"error": f"YouTube 다운로드 오류: {str(e)[:300]}"}), 500
-    except subprocess.TimeoutExpired:
-        return jsonify({"error": "처리 시간 초과 (5분). 영상이 너무 깁니다."}), 500
-    except Exception as e:
-        return jsonify({"error": f"오류: {str(e)[:300]}"}), 500
+def _guard() -> None:
+    """레이트 리밋과 API 키를 요청 처리 전에 확인합니다."""
+    try:
+        config.require_api_key()
+    except RuntimeError as exc:
+        # 설정 누락은 서버 문제이므로 503으로, 환경 변수 이름은 로그에만 남깁니다.
+        log.error("설정 오류: %s", exc)
+        raise AnalyzerError(
+            "서버에 AI API 키가 설정되지 않았습니다. 관리자에게 문의해 주세요.", 503
+        ) from exc
+    analysis_limiter.check(client_key(request))
+
+
+@app.post("/api/analyze")
+def analyze():
+    payload = request.get_json(silent=True) or {}
+    video_id = _read_url(payload)
+    mode = (
+        pipeline.MODE_FAST
+        if payload.get("capture_frames") is False
+        else pipeline.MODE_SMART
+    )
+    _guard()
+    return jsonify(pipeline.run_to_completion(video_id, mode))
+
+
+@app.post("/api/analyze-text")
+def analyze_text():
+    payload = request.get_json(silent=True) or {}
+    video_id = _read_url(payload)
+    _guard()
+    return jsonify(pipeline.run_to_completion(video_id, pipeline.MODE_FAST))
+
+
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+@app.get("/api/analyze/stream")
+def analyze_stream():
+    """진행 상황을 실시간으로 흘려보내는 SSE 엔드포인트.
+
+    분석에 수 분이 걸리므로, 응답을 끝까지 붙들고 있는 대신 단계별 이벤트를
+    보냅니다. 프록시/게이트웨이의 유휴 타임아웃에도 걸리지 않습니다.
+    """
+    video_id = youtube.extract_video_id(request.args.get("url", ""))
+    mode = (
+        pipeline.MODE_FAST
+        if request.args.get("mode") == pipeline.MODE_FAST
+        else pipeline.MODE_SMART
+    )
+    # 스트림을 열기 전에 검사해야 429/400이 제대로 된 HTTP 상태로 나갑니다.
+    _guard()
+
+    def generate():
+        try:
+            for event in pipeline.run(video_id, mode):
+                yield _sse(event)
+        except AnalyzerError as exc:
+            yield _sse({"type": "error", "message": exc.message})
+        except Exception as exc:  # noqa: BLE001
+            log.exception("분석 중 오류: %s", exc)
+            yield _sse({"type": "error", "message": "서버에서 오류가 발생했습니다."})
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# --------------------------------------------------------------------------
+# 구간 자르기(부가 기능)
+# --------------------------------------------------------------------------
+
+
+@app.post("/api/clip")
+def make_clip():
+    payload = request.get_json(silent=True) or {}
+    video_id = _read_url(payload)
+    start = (payload.get("start") or "").strip()
+    end = (payload.get("end") or "").strip()
+    if not start or not end:
+        raise AnalyzerError("시작 시간과 끝 시간을 모두 입력해 주세요.")
+
+    analysis_limiter.check(client_key(request))
+
+    buffer = clip.make_clip(video_id, start, end)
+    filename = f"clip_{start.replace(':', '')}_{end.replace(':', '')}.mp4"
+    # BytesIO로 반환하므로 임시 파일 삭제와 응답 전송이 경쟁하지 않습니다.
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="video/mp4",
+    )
+
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, threaded=True)

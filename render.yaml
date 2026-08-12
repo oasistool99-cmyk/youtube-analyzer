@@ -3,6 +3,31 @@ services:
     name: youtube-analyzer-api
     runtime: docker
     plan: free
+    healthCheckPath: /api/health
     envVars:
+      # 필수: Render 대시보드의 Environment 탭에서 직접 입력합니다.
       - key: ANTHROPIC_API_KEY
-        sync: false  # Render 대시보드에서 직접 입력
+        sync: false
+
+      # 모델과 추론 강도. effort는 low|medium|high|xhigh|max.
+      - key: ANALYSIS_MODEL
+        value: claude-opus-5
+      - key: ANALYSIS_EFFORT
+        value: medium
+
+      # 남용 방지 (무료 플랜 보호)
+      - key: MAX_VIDEO_DURATION_SEC
+        value: "3600"
+      - key: RATE_LIMIT_REQUESTS
+        value: "5"
+      - key: RATE_LIMIT_WINDOW_SEC
+        value: "600"
+
+      # 비용 표시에 쓰이는 환율(근사치)
+      - key: USD_TO_KRW
+        value: "1400"
+
+      # 외부 페이지에서 API를 호출한다면 출처를 쉼표로 나열하세요.
+      # 비워 두면 동일 출처만 허용합니다.
+      - key: CORS_ORIGINS
+        sync: false
