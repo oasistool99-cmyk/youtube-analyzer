@@ -13,7 +13,9 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
+from typing import Literal
 
 import yt_dlp
 
@@ -26,6 +28,7 @@ from analyzer.errors import (
     VideoUnavailableError,
 )
 from analyzer.vtt import Cue, parse_vtt
+from analyzer.ytdlp_errors import classify, is_bot_check
 
 log = logging.getLogger(__name__)
 
@@ -92,14 +95,77 @@ class VideoInfo:
         }
 
 
+_cookiefile_cache: str | None | Literal[False] = False
+
+
+def resolve_cookiefile() -> str | None:
+    """쓸 수 있는 쿠키 파일 경로를 돌려줍니다. 없으면 None.
+
+    yt-dlp는 사용 후 갱신된 쿠키를 파일에 다시 씁니다. Render의 Secret Files
+    (`/etc/secrets/...`)는 읽기 전용이므로, 원본을 그대로 넘기면 저장 단계에서
+    실패합니다. 항상 쓰기 가능한 임시 위치로 복사해 그 사본을 씁니다.
+    """
+    global _cookiefile_cache
+    if _cookiefile_cache is not False:
+        return _cookiefile_cache
+
+    target = os.path.join(tempfile.gettempdir(), "ytdlp_cookies.txt")
+    source = config.YTDLP_COOKIES_FILE
+
+    try:
+        if source and os.path.exists(source):
+            shutil.copyfile(source, target)
+            log.info("유튜브 쿠키를 사용합니다: %s", source)
+        elif config.YTDLP_COOKIES_B64:
+            with open(target, "wb") as fh:
+                fh.write(base64.b64decode(config.YTDLP_COOKIES_B64))
+            log.info("유튜브 쿠키를 사용합니다: YTDLP_COOKIES_B64")
+        else:
+            _cookiefile_cache = None
+            return None
+        os.chmod(target, 0o600)
+        _cookiefile_cache = target
+    except Exception as exc:  # 쿠키 설정 실패가 서비스를 막지는 않습니다.
+        log.error("쿠키 파일을 준비하지 못했습니다: %s", exc)
+        _cookiefile_cache = None
+
+    return _cookiefile_cache
+
+
 def base_opts() -> dict:
-    return {
+    opts = {
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
         "ffmpeg_location": ffmpeg_path(),
         "socket_timeout": 30,
         "retries": 2,
+    }
+
+    cookiefile = resolve_cookiefile()
+    if cookiefile:
+        opts["cookiefile"] = cookiefile
+    if config.YTDLP_PROXY:
+        opts["proxy"] = config.YTDLP_PROXY
+    if config.YTDLP_PLAYER_CLIENT:
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": [
+                    client.strip()
+                    for client in config.YTDLP_PLAYER_CLIENT.split(",")
+                    if client.strip()
+                ]
+            }
+        }
+    return opts
+
+
+def access_status() -> dict:
+    """유튜브 접근 관련 설정 상태(헬스체크용). 비밀값은 담지 않습니다."""
+    return {
+        "cookies": bool(resolve_cookiefile()),
+        "proxy": bool(config.YTDLP_PROXY),
+        "player_client": config.YTDLP_PLAYER_CLIENT or None,
     }
 
 
@@ -110,10 +176,15 @@ def fetch_info(video_id: str) -> tuple[VideoInfo, dict]:
         with yt_dlp.YoutubeDL(opts) as ydl:
             raw = ydl.extract_info(canonical_url(video_id), download=False)
     except yt_dlp.utils.DownloadError as exc:
-        log.warning("메타데이터 조회 실패 %s: %s", video_id, exc)
-        raise VideoUnavailableError(
-            "영상 정보를 가져오지 못했습니다. 비공개이거나 삭제된 영상일 수 있습니다."
-        ) from exc
+        if is_bot_check(exc):
+            log.error(
+                "유튜브 봇 차단 %s: 쿠키(YTDLP_COOKIES_FILE) 또는 프록시 설정이 "
+                "필요합니다. 원문: %s",
+                video_id, exc,
+            )
+        else:
+            log.warning("메타데이터 조회 실패 %s: %s", video_id, exc)
+        raise classify(exc) from exc
 
     if raw.get("is_live"):
         raise VideoUnavailableError("실시간 방송은 분석할 수 없습니다.")
@@ -205,7 +276,7 @@ def download_video(video_id: str, work_dir: str) -> str:
             info = ydl.extract_info(canonical_url(video_id), download=True)
     except yt_dlp.utils.DownloadError as exc:
         log.warning("영상 다운로드 실패 %s: %s", video_id, exc)
-        raise VideoUnavailableError("영상을 내려받지 못했습니다.") from exc
+        raise classify(exc, "영상을 내려받지 못했습니다.") from exc
 
     downloads = info.get("requested_downloads") or []
     for entry in downloads:

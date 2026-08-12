@@ -60,6 +60,27 @@ CACHE_MAX_ENTRIES = _int("CACHE_MAX_ENTRIES", 64)
 RATE_LIMIT_REQUESTS = _int("RATE_LIMIT_REQUESTS", 5)
 RATE_LIMIT_WINDOW_SEC = _int("RATE_LIMIT_WINDOW_SEC", 600)
 
+# ---- yt-dlp 접근 설정 ----
+# 유튜브는 클라우드(데이터센터) IP에서 오는 요청을 봇으로 보고 차단하는 일이
+# 잦습니다. 아래 값들이 그 우회 수단입니다.
+#
+# 쿠키: 로그인된 브라우저에서 뽑은 cookies.txt를 붙이면 대부분 해결됩니다.
+#   - Render는 Secret Files로 올리면 /etc/secrets/<파일명> 에 놓입니다.
+#     기본 경로를 그쪽으로 잡아 두었으니 파일명을 cookies.txt로 올리면 됩니다.
+#   - 파일을 못 쓰는 환경이면 YTDLP_COOKIES_B64에 base64로 넣어도 됩니다.
+YTDLP_COOKIES_FILE = os.environ.get(
+    "YTDLP_COOKIES_FILE", "/etc/secrets/cookies.txt"
+).strip()
+YTDLP_COOKIES_B64 = os.environ.get("YTDLP_COOKIES_B64", "").strip()
+
+# 프록시(예: http://user:pass@host:port). 주거용 프록시를 쓰면 IP 차단을 피할 수
+# 있습니다.
+YTDLP_PROXY = os.environ.get("YTDLP_PROXY", "").strip()
+
+# 유튜브 추출 클라이언트. 차단 우회 방법이 수시로 바뀌므로 코드 수정 없이
+# 바꿀 수 있게 열어 둡니다 (예: "android,web" 또는 "tv").
+YTDLP_PLAYER_CLIENT = os.environ.get("YTDLP_PLAYER_CLIENT", "").strip()
+
 # ---- 기타 ----
 # 비용 표시는 환율에 따라 달라지므로 근사치입니다.
 USD_TO_KRW = _float("USD_TO_KRW", 1400.0)

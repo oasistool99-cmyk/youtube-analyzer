@@ -60,6 +60,41 @@ pytest                   # 테스트
 | `CORS_ORIGINS` | (없음) | 비우면 동일 출처만 허용. 외부 호출이 필요하면 쉼표로 나열 |
 | `SUBTITLE_LANG_PRIORITY` | `ko,en` | 자막 언어 우선순위 |
 | `CLIP_MAX_DURATION_SEC` | `600` | 한 번에 자를 수 있는 최대 길이 |
+| `YTDLP_COOKIES_FILE` | `/etc/secrets/cookies.txt` | 유튜브 쿠키 파일 경로 (아래 참고) |
+| `YTDLP_COOKIES_B64` | (없음) | 쿠키 파일을 base64로 넣는 대안 |
+| `YTDLP_PROXY` | (없음) | `http://user:pass@host:port` |
+| `YTDLP_PLAYER_CLIENT` | (없음) | 예: `android,web` — 차단 우회용 |
+
+## 🚧 "유튜브가 봇으로 판단해 차단했습니다"
+
+클라우드 서버(Render, Cloud Run, EC2 등)의 IP는 유튜브가 봇으로 분류하는 일이
+잦습니다. 로컬에서는 잘 되던 게 배포 후에만 실패한다면 대부분 이 문제입니다.
+
+**해결: 유튜브 쿠키 붙이기**
+
+1. 브라우저에서 유튜브에 로그인합니다.
+2. 쿠키를 Netscape 형식 `cookies.txt`로 내보냅니다.
+   (Chrome/Firefox 확장 "Get cookies.txt LOCALLY" 등)
+3. Render 대시보드 → 서비스 → **Environment** → **Secret Files** →
+   **Add Secret File**
+   - Filename: `cookies.txt`
+   - Contents: 내보낸 파일 내용 붙여넣기
+4. 저장하면 자동 재배포되고, `/etc/secrets/cookies.txt`에 놓입니다.
+   기본 `YTDLP_COOKIES_FILE`이 이 경로라 추가 설정은 필요 없습니다.
+
+`/api/health`의 `youtube_access.cookies`가 `true`면 인식된 것입니다.
+
+> 쿠키에는 계정 세션이 담깁니다. 부계정을 쓰고, 저장소에 커밋하지 마세요.
+> 서버는 읽기 전용 원본을 건드리지 않고 쓰기 가능한 임시 위치로 복사해 씁니다
+> (yt-dlp가 사용 후 쿠키를 되쓰기 때문입니다).
+
+**그래도 안 되면**
+
+- `YTDLP_PLAYER_CLIENT=android,web` — 추출 방식 변경. 유튜브 대응이 자주
+  바뀌므로 코드 수정 없이 시도할 수 있게 열어 두었습니다.
+- `YTDLP_PROXY` — 주거용 프록시를 거치면 IP 기반 차단을 피할 수 있습니다.
+- `pip install -U yt-dlp` 후 재배포 — 차단 우회 로직은 yt-dlp가 계속 갱신합니다.
+  `requirements.txt`의 버전을 올리고 다시 배포하세요.
 
 ## 📡 API
 

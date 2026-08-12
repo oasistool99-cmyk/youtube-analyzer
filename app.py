@@ -84,6 +84,8 @@ def health():
             "effort": config.ANALYSIS_EFFORT,
             "api_key_configured": bool(config.ANTHROPIC_API_KEY),
             "max_video_duration_sec": config.MAX_VIDEO_DURATION_SEC,
+            # 유튜브 차단 우회 설정이 실제로 잡혔는지 확인용(비밀값은 없음).
+            "youtube_access": youtube.access_status(),
         }
     )
 

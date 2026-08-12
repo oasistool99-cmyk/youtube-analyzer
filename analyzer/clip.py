@@ -25,6 +25,7 @@ import config
 from analyzer import youtube
 from analyzer.errors import AnalyzerError, UpstreamError
 from analyzer.timecode import InvalidTimecode, parse_timecode
+from analyzer.ytdlp_errors import classify
 
 log = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ def _download(video_id: str, work_dir: str) -> str:
             info = ydl.extract_info(youtube.canonical_url(video_id), download=True)
     except yt_dlp.utils.DownloadError as exc:
         log.warning("클립용 다운로드 실패 %s: %s", video_id, exc)
-        raise UpstreamError("영상을 내려받지 못했습니다.") from exc
+        raise classify(exc, "영상을 내려받지 못했습니다.") from exc
 
     for entry in info.get("requested_downloads") or []:
         path = entry.get("filepath")
