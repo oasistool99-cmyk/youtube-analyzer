@@ -13,6 +13,7 @@ import anthropic
 from pydantic import BaseModel, Field
 
 import config
+from analyzer import claude_errors
 from analyzer.cost import UsageMeter
 from analyzer.errors import UpstreamError
 
@@ -101,17 +102,10 @@ def _parse(
             system=system,
             messages=[{"role": "user", "content": content}],
         )
-    except anthropic.RateLimitError as exc:
-        log.warning("Claude 레이트 리밋: %s", exc)
-        raise UpstreamError(
-            "AI 분석 요청이 몰려 있습니다. 잠시 후 다시 시도해 주세요.", 429
-        ) from exc
-    except anthropic.APIStatusError as exc:
-        log.error("Claude API 오류 %s: %s", exc.status_code, exc.message)
-        raise UpstreamError("AI 분석 중 오류가 발생했습니다.") from exc
-    except anthropic.APIConnectionError as exc:
-        log.error("Claude 연결 실패: %s", exc)
-        raise UpstreamError("AI 서버에 연결하지 못했습니다.") from exc
+    except (anthropic.APIStatusError, anthropic.APIConnectionError) as exc:
+        # 원문(응답 본문, request_id 포함)은 로그로만 남깁니다.
+        log.error("Claude API 호출 실패: %s", claude_errors.log_context(exc))
+        raise claude_errors.classify(exc) from exc
 
     meter.add(response.usage)
 
